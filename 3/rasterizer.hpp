@@ -86,6 +86,7 @@ namespace rst
 
     private:
         void draw_line(Eigen::Vector3f begin, Eigen::Vector3f end);
+        bool setDepth(int x, int y, float z);
 
         void rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& world_pos);
 

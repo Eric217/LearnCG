@@ -49,8 +49,26 @@ Eigen::Matrix4f get_model_matrix(float angle)
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
 {
-
+    Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
     
+    Eigen::Matrix4f p2o = projection;
+    auto fov = eye_fov / 180 * M_PI;
+    auto top = tanf(fov / 2) * zNear;
+    p2o(0, 0) = zNear;
+    p2o(1, 1) = zNear;
+    p2o(2, 2) = zNear + zFar;
+    p2o(2, 3) = zNear * zFar;
+    p2o(3, 2) = -1;
+    p2o(3, 3) = 0;
+    
+    auto h = top * 2;
+    auto w = aspect_ratio * h ;
+    projection(0, 0) = 2 / w;
+    projection(1, 1) = 2 / h;
+    projection(2, 2) = -2 / (zFar - zNear);
+    projection(2, 3) = -(zFar + zNear) / (zFar - zNear);
+    
+    return projection * p2o;
 }
 
 Eigen::Vector3f vertex_shader(const vertex_shader_payload& payload)
@@ -240,17 +258,19 @@ Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload& payload)
 
 int main(int argc, const char** argv)
 {
+    int frameC = 0;
     std::vector<Triangle*> TriangleList;
-
+    std::string modelDir = MODEL_DIR;
     float angle = 140.0;
     bool command_line = false;
 
     std::string filename = "output.png";
     objl::Loader Loader;
-    std::string obj_path = "../models/spot/";
+    std::string obj_path = modelDir + "/spot/";
 
     // Load .obj File
-    bool loadout = Loader.LoadFile("../models/spot/spot_triangulated_good.obj");
+    bool loadout = Loader.LoadFile(obj_path + "spot_triangulated_good.obj");
+    
     for(auto mesh:Loader.LoadedMeshes)
     {
         for(int i=0;i<mesh.Vertices.size();i+=3)
@@ -275,9 +295,12 @@ int main(int argc, const char** argv)
 
     if (argc >= 2)
     {
-        command_line = true;
+       // command_line = true;
         filename = std::string(argv[1]);
-
+        if (argc == 3) {
+            filename = std::string(argv[2]) + "_" + filename;
+        }
+        
         if (argc == 3 && std::string(argv[2]) == "texture")
         {
             std::cout << "Rasterizing using the texture shader\n";
@@ -348,17 +371,17 @@ int main(int argc, const char** argv)
 
         cv::imshow("image", image);
         cv::imwrite(filename, image);
-        key = cv::waitKey(10);
+        key = cv::waitKey(10000);
 
         if (key == 'a' )
         {
-            angle -= 0.1;
+            angle -= 20;
         }
         else if (key == 'd')
         {
-            angle += 0.1;
+            angle += 20;
         }
-
+        printf("frame count %d\n", ++frameC);
     }
     return 0;
 }

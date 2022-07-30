@@ -6,7 +6,7 @@ project (${TARGET_NAME})
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
  
-file(GLOB_RECURSE DEMO_MODELS ./models/*)
+file(GLOB_RECURSE DEMO_MODELS ${CMAKE_CURRENT_SOURCE_DIR}/models/*)
 
 set(DEMO_RESOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Assignment3.pdf
@@ -24,4 +24,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${OpenCV_LIBS})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${DEMO_RESOURCES})
 source_group(src FILES ${SRCS} )
-
+ 
+target_compile_definitions(${TARGET_NAME} PRIVATE
+    MODEL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/models"
+)

@@ -170,6 +170,15 @@ static std::tuple<float, float, float> computeBarycentric2D(float x, float y, co
     return {c1,c2,c3};
 }
 
+static float min3(float a, float b, float c) {
+    return std::min(std::min(a, b), c);
+}
+
+static float max3(float a, float b, float c) {
+    return std::max(std::max(a, b), c);
+}
+static bool pointInside(float x, float y, const Triangle& t);
+
 void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
 
     float f1 = (50 - 0.1) / 2.0;
@@ -203,7 +212,11 @@ void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
             vec.y()/=vec.w();
             vec.z()/=vec.w();
         }
-
+        // 切线 MV 变换后仍保存 tangent，但是法线没有这个性质。
+        // 我们知道 T*N = 0，T‘ * N’ still = 0，即 M*T * M‘N = 0，现在推理 M‘
+        // 必须转置才能乘，(M*T)t * M’N = 0，Tt * Mt * M’ * N = 0，
+        // 如果假定 Mt * M’ = I，那么等式就成立了，所以 M‘ = Mt-1。。。
+        // 以上要求 M 可逆，如果不可逆，M‘ 换成伴随矩阵的转置。
         Eigen::Matrix4f inv_trans = (view * model).inverse().transpose();
         Eigen::Vector4f n[] = {
                 inv_trans * to_vec4(t->normal[0], 0.0f),
@@ -259,28 +272,103 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
-    // TODO: From your HW3, get the triangle rasterization code.
-    // TODO: Inside your rasterization loop:
-    //    * v[i].w() is the vertex view space depth value z.
-    //    * Z is interpolated view space depth for the current pixel
-    //    * zp is depth between zNear and zFar, used for z-buffer
+   
+    auto& v = t.v;
+    
+    auto minX = (int)std::floor(std::min(std::min(v[0].x(), v[1].x()), v[2].x()));
+    auto maxX = (int)std::ceil(std::max(std::max(v[0].x(), v[1].x()), v[2].x()));
+    auto minY = (int)std::floor(min3(v[0].y(), v[1].y(), v[2].y()));
+    auto maxY = (int)std::ceil(max3(v[0].y(), v[1].y(), v[2].y()));
+    
+    float targetX;
+    float targetY;
+    for (int i = minX; i <= maxX; i++) {
+        for (int j = minY; j <= maxY; j++) {
+            // [i][j]
+            targetX = i + 0.5;
+            targetY = j + 0.5;
+            
+            auto isInside = pointInside(targetX, targetY, t);
+            if (!isInside) {
+                continue;
+            }
+            auto [alpha, beta, gamma] = computeBarycentric2D(targetX, targetY, t.v);
+            // 前面齐次空间变屏幕空间 重心坐标被除以 w，所以现在屏幕空间的重心坐标按新的插值
+            
+         //   float z_interpolated = alpha * v[0].z() + beta * v[1].z() + gamma * v[2].z();
+            auto newA = alpha / v[0].w();
+            auto newB = beta / v[1].w();
+            auto newG = gamma / v[2].w();
+            
+            float Z = (newA + newB + newG);
+            float z_interpolated = (newA * v[0].z() + newB * v[1].z() + newG * v[2].z()) / Z;
+            
+            if (!setDepth(i, j, z_interpolated)) {
+                continue;
+            }
+            
+//            auto newA = alpha / v[0].w();
+//            auto newB = beta / v[1].w();
+//            auto newG = gamma / v[2].w();
+//
+//            float Z = (newA + newB + newG);
+            
+            Eigen::Vector2i point(i, j);
+           
+            Vector3f i_color = (newA * t.color[0] + newB * t.color[1] + newG * t.color[2]) / Z;
+            Vector3f i_normal = (newA * t.normal[0] + newB * t.normal[1] + newG * t.normal[2]) / Z;
+            Vector2f i_texcoords = (newA * t.tex_coords[0] + newB * t.tex_coords[1] + newG * t.tex_coords[2]) / Z;
 
-    // float Z = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-    // float zp = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
-    // zp *= Z;
+            Vector3f i_view_pos = (newA * view_pos[0] + newB * view_pos[1] + newG * view_pos[2]) / Z;
+            
+            fragment_shader_payload payload(i_color,
+                                            i_normal.normalized(),
+                                            i_texcoords,
+                                            texture ? &*texture : nullptr);
+            payload.view_pos = i_view_pos;
+            
+            auto pixel_color = fragment_shader(payload);
+            
+            set_pixel(point, pixel_color);
+        }
+    }
+}
 
-    // TODO: Interpolate the attributes:
-    // auto interpolated_color
-    // auto interpolated_normal
-    // auto interpolated_texcoords
-    // auto interpolated_shadingcoords
+bool rst::rasterizer::setDepth(int x, int y, float z) {
+    auto p = get_index(x, y);
+//    auto p = width * y + x;
+    if (depth_buf[p] > z) {
+        depth_buf[p] = z;
+        return true;
+    }
+    return false;
+}
 
-    // Use: fragment_shader_payload payload( interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);
-    // Use: payload.view_pos = interpolated_shadingcoords;
-    // Use: Instead of passing the triangle's color directly to the frame buffer, pass the color to the shaders first to get the final color;
-    // Use: auto pixel_color = fragment_shader(payload);
-
- 
+static bool pointInside(float x, float y, const Triangle& t) {
+    auto& a = t.v[0].topRows(2);
+    auto& b = t.v[1].topRows(2);
+    auto& c = t.v[2].topRows(2);
+    
+    Vector2f p = {x, y};
+    
+    auto ac = (c - a);
+    auto cb = (b - c);
+    auto ba = (a - b);
+    
+    auto ap = (p - a);
+    auto bp = (p - b);
+    auto cp = (p - c);
+    
+    auto product1 = ap.x() * ac.y() - ac.x() * ap.y();
+    auto product2 = cp.x() * cb.y() - cb.x() * cp.y();
+    auto product3 = bp.x() * ba.y() - ba.x() * bp.y();
+    assert(product1 != 0 && product2 != 0 && product3 != 0);
+    
+    if (product1 > 0) {
+        return !(product2 < 0 || product3 < 0);
+    } else {
+        return !(product2 > 0 || product3 > 0);
+    }
 }
 
 void rst::rasterizer::set_model(const Eigen::Matrix4f& m)
