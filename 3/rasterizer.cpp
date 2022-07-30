@@ -272,7 +272,6 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
-   
     auto& v = t.v;
     
     auto minX = (int)std::floor(std::min(std::min(v[0].x(), v[1].x()), v[2].x()));
@@ -294,31 +293,18 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
             }
             auto [alpha, beta, gamma] = computeBarycentric2D(targetX, targetY, t.v);
             // 前面齐次空间变屏幕空间 重心坐标被除以 w，所以现在屏幕空间的重心坐标按新的插值
-            
-         //   float z_interpolated = alpha * v[0].z() + beta * v[1].z() + gamma * v[2].z();
             auto newA = alpha / v[0].w();
             auto newB = beta / v[1].w();
             auto newG = gamma / v[2].w();
             
             float Z = (newA + newB + newG);
             float z_interpolated = (newA * v[0].z() + newB * v[1].z() + newG * v[2].z()) / Z;
-            
             if (!setDepth(i, j, z_interpolated)) {
                 continue;
             }
-            
-//            auto newA = alpha / v[0].w();
-//            auto newB = beta / v[1].w();
-//            auto newG = gamma / v[2].w();
-//
-//            float Z = (newA + newB + newG);
-            
-            Eigen::Vector2i point(i, j);
-           
             Vector3f i_color = (newA * t.color[0] + newB * t.color[1] + newG * t.color[2]) / Z;
             Vector3f i_normal = (newA * t.normal[0] + newB * t.normal[1] + newG * t.normal[2]) / Z;
             Vector2f i_texcoords = (newA * t.tex_coords[0] + newB * t.tex_coords[1] + newG * t.tex_coords[2]) / Z;
-
             Vector3f i_view_pos = (newA * view_pos[0] + newB * view_pos[1] + newG * view_pos[2]) / Z;
             
             fragment_shader_payload payload(i_color,
@@ -329,6 +315,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
             
             auto pixel_color = fragment_shader(payload);
             
+            Eigen::Vector2i point(i, j);
             set_pixel(point, pixel_color);
         }
     }
@@ -336,7 +323,6 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
 
 bool rst::rasterizer::setDepth(int x, int y, float z) {
     auto p = get_index(x, y);
-//    auto p = width * y + x;
     if (depth_buf[p] > z) {
         depth_buf[p] = z;
         return true;

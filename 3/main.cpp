@@ -1,5 +1,6 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <math.h>
 
 #include "global.hpp"
 #include "rasterizer.hpp"
@@ -135,7 +136,7 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
 
     return result_color * 255.f;
 }
-
+ 
 Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
 {
     Eigen::Vector3f ka = Eigen::Vector3f(0.005, 0.005, 0.005);
@@ -154,18 +155,33 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f color = payload.color;
     Eigen::Vector3f point = payload.view_pos;
     Eigen::Vector3f normal = payload.normal;
-
+    
+    auto v = eye_pos - point;
+    
     Eigen::Vector3f result_color = {0, 0, 0};
     for (auto& light : lights)
     {
-        // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
-        // components are. Then, accumulate that result on the *result_color* object.
+        Vector3f A = ka.cwiseProduct(amb_light_intensity);
         
+        // ambient 是每个光线加一次，吧
+        result_color += A;
+        
+        Vector3f D(0,0,0), S(0,0,0);
+        auto l = light.position - point;
+        auto r2 = l.squaredNorm();
+        auto ln = l.normalized();
+        auto nn = normal.normalized();
+        float costheta = ln.dot(nn);
+        if (costheta > 0) {
+            D = light.intensity.cwiseProduct(kd) / r2 * costheta;
+            float h = (ln + eye_pos.normalized()).normalized().dot(nn);
+            S = light.intensity.cwiseProduct(ks) / r2 * std::pow(h > 0 ? h : 0, p);
+        }
+        result_color += D + S;
     }
 
     return result_color * 255.f;
 }
-
 
 
 Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload& payload)

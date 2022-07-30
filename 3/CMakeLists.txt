@@ -2,7 +2,14 @@ cmake_minimum_required (VERSION 3.20.0)
 set(TARGET_NAME Rasterizer3)
 
 project (${TARGET_NAME})
- 
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_MODULE_PATH
+     /usr/local/share/cmake/Modules
+     /usr/local/lib/cmake
+)
+
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
  
