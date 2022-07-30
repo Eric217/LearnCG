@@ -102,8 +102,8 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f return_color = {0, 0, 0};
     if (payload.texture)
     {
-        // TODO: Get the texture value at the texture coordinates of the current fragment
-
+        return_color = payload.texture->getColor(payload.tex_coords.x(),
+                                                 payload.tex_coords.y());
     }
     Eigen::Vector3f texture_color;
     texture_color << return_color.x(), return_color.y(), return_color.z();
@@ -126,12 +126,24 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f normal = payload.normal;
 
     Eigen::Vector3f result_color = {0, 0, 0};
+    auto v = eye_pos - point;
 
     for (auto& light : lights)
     {
-        // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
-        // components are. Then, accumulate that result on the *result_color* object.
-
+        result_color += ka.cwiseProduct(amb_light_intensity);
+        
+        Vector3f D(0,0,0), S(0,0,0);
+        auto l = light.position - point;
+        auto r2 = l.squaredNorm();
+        auto ln = l.normalized();
+        auto nn = normal.normalized();
+        float costheta = ln.dot(nn);
+        if (costheta > 0) {
+            D = light.intensity.cwiseProduct(kd) / r2 * costheta;
+            float h = (ln + v.normalized()).normalized().dot(nn);
+            S = light.intensity.cwiseProduct(ks) / r2 * std::pow(h > 0 ? h : 0, p);
+            result_color += D + S;
+        }
     }
 
     return result_color * 255.f;
@@ -174,7 +186,7 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
         float costheta = ln.dot(nn);
         if (costheta > 0) {
             D = light.intensity.cwiseProduct(kd) / r2 * costheta;
-            float h = (ln + eye_pos.normalized()).normalized().dot(nn);
+            float h = (ln + v.normalized()).normalized().dot(nn);
             S = light.intensity.cwiseProduct(ks) / r2 * std::pow(h > 0 ? h : 0, p);
         }
         result_color += D + S;
@@ -311,35 +323,35 @@ int main(int argc, const char** argv)
 
     if (argc >= 2)
     {
-       // command_line = true;
+        command_line = argc == 4;
         filename = std::string(argv[1]);
-        if (argc == 3) {
+        if (argc >= 3) {
             filename = std::string(argv[2]) + "_" + filename;
         }
         
-        if (argc == 3 && std::string(argv[2]) == "texture")
+        if (argc >= 3 && std::string(argv[2]) == "texture")
         {
             std::cout << "Rasterizing using the texture shader\n";
             active_shader = texture_fragment_shader;
             texture_path = "spot_texture.png";
             r.set_texture(Texture(obj_path + texture_path));
         }
-        else if (argc == 3 && std::string(argv[2]) == "normal")
+        else if (argc >= 3 && std::string(argv[2]) == "normal")
         {
             std::cout << "Rasterizing using the normal shader\n";
             active_shader = normal_fragment_shader;
         }
-        else if (argc == 3 && std::string(argv[2]) == "phong")
+        else if (argc >= 3 && std::string(argv[2]) == "phong")
         {
             std::cout << "Rasterizing using the phong shader\n";
             active_shader = phong_fragment_shader;
         }
-        else if (argc == 3 && std::string(argv[2]) == "bump")
+        else if (argc >= 3 && std::string(argv[2]) == "bump")
         {
             std::cout << "Rasterizing using the bump shader\n";
             active_shader = bump_fragment_shader;
         }
-        else if (argc == 3 && std::string(argv[2]) == "displacement")
+        else if (argc >= 3 && std::string(argv[2]) == "displacement")
         {
             std::cout << "Rasterizing using the bump shader\n";
             active_shader = displacement_fragment_shader;
