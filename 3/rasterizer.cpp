@@ -348,7 +348,7 @@ static bool pointInside(float x, float y, const Triangle& t) {
     auto product1 = ap.x() * ac.y() - ac.x() * ap.y();
     auto product2 = cp.x() * cb.y() - cb.x() * cp.y();
     auto product3 = bp.x() * ba.y() - ba.x() * bp.y();
-    assert(product1 != 0 && product2 != 0 && product3 != 0);
+    //assert(product1 != 0 && product2 != 0 && product3 != 0);
     
     if (product1 > 0) {
         return !(product2 < 0 || product3 < 0);

@@ -24,6 +24,9 @@ Eigen::Matrix4f get_view_matrix(Eigen::Vector3f eye_pos)
     return view;
 }
 
+static bool usingBunny = false;
+static bool usingCrate = false;
+
 Eigen::Matrix4f get_model_matrix(float angle)
 {
     Eigen::Matrix4f rotation;
@@ -38,13 +41,18 @@ Eigen::Matrix4f get_model_matrix(float angle)
               0, 2.5, 0, 0,
               0, 0, 2.5, 0,
               0, 0, 0, 1;
+    if (usingBunny) {
+        scale.topRows(3) *= 10;
+    } else if (usingCrate) {
+        scale.topRows(3) *= 0.4;
+    }
 
     Eigen::Matrix4f translate;
     translate << 1, 0, 0, 0,
             0, 1, 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1;
-
+    translate(1, 3) = usingBunny ? -2 : 0;
     return translate * rotation * scale;
 }
 
@@ -152,7 +160,8 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
 Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
 {
     Eigen::Vector3f ka = Eigen::Vector3f(0.005, 0.005, 0.005);
-    Eigen::Vector3f kd = payload.color;
+    ka *= usingBunny ? 3.5 : 1;
+    Eigen::Vector3f kd = usingBunny ? Vector3f{1, 1, 1} : payload.color;
     Eigen::Vector3f ks = Eigen::Vector3f(0.7937, 0.7937, 0.7937);
 
     auto l1 = light{{20, 20, 20}, {500, 500, 500}};
@@ -269,6 +278,7 @@ Eigen::Vector3f bump_fragment_shader(const fragment_shader_payload& payload)
 
     // TODO: Implement bump mapping here
     // Let n = normal = (x, y, z)
+    
     // Vector t = (x*y/sqrt(x*x+z*z),sqrt(x*x+z*z),z*y/sqrt(x*x+z*z))
     // Vector b = n cross product t
     // Matrix TBN = [t b n]
@@ -294,10 +304,28 @@ int main(int argc, const char** argv)
 
     std::string filename = "output.png";
     objl::Loader Loader;
-    std::string obj_path = modelDir + "/spot/";
-
+     std::string obj_path = modelDir + "/spot/";
+//    std::string obj_path = modelDir + "/Crate/";
+//    std::string obj_path = modelDir + "/bunny/";
+//    std::string obj_path = modelDir + "/cube/";
+//    std::string obj_path = modelDir + "/rock/";
+    
+    std::string obj_name = "spot_triangulated_good.obj";
+//    std::string obj_name = "Crate1.obj";
+//    std::string obj_name = "bunny.obj";
+//    std::string obj_name = "cube.obj";
+//    std::string obj_name = "rock.obj";
     // Load .obj File
-    bool loadout = Loader.LoadFile(obj_path + "spot_triangulated_good.obj");
+    bool loadout = Loader.LoadFile(obj_path + obj_name);
+    usingBunny = obj_name == "bunny.obj";
+    usingCrate = obj_name == "Crate1.obj" || obj_name == "cube.obj" || obj_name == "rock.obj";
+    
+    const char* texture_path = 0;
+    if (obj_name == "rock.obj") {
+        texture_path = "rock.png";
+    } else if (obj_name == "spot_triangulated_good.obj") {
+        texture_path = "spot_texture.png";
+    }
     
     for(auto mesh:Loader.LoadedMeshes)
     {
@@ -316,25 +344,23 @@ int main(int argc, const char** argv)
 
     rst::rasterizer r(700, 700);
 
-    auto texture_path = "hmap.jpg";
-    r.set_texture(Texture(obj_path + texture_path));
-
     std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = phong_fragment_shader;
 
     if (argc >= 2)
     {
         command_line = argc == 4;
-        filename = std::string(argv[1]);
+        filename = obj_name + "_" + std::string(argv[1]);
         if (argc >= 3) {
-            filename = std::string(argv[2]) + "_" + filename;
+            filename = obj_name + "_" + std::string(argv[2]) + "_" + std::string(argv[1]);
         }
         
         if (argc >= 3 && std::string(argv[2]) == "texture")
         {
             std::cout << "Rasterizing using the texture shader\n";
             active_shader = texture_fragment_shader;
-            texture_path = "spot_texture.png";
-            r.set_texture(Texture(obj_path + texture_path));
+            if (texture_path) {
+                r.set_texture(Texture(obj_path + texture_path));
+            }
         }
         else if (argc >= 3 && std::string(argv[2]) == "normal")
         {
@@ -350,11 +376,15 @@ int main(int argc, const char** argv)
         {
             std::cout << "Rasterizing using the bump shader\n";
             active_shader = bump_fragment_shader;
+            auto texture_path = "hmap.jpg";
+            r.set_texture(Texture(obj_path + texture_path));
         }
         else if (argc >= 3 && std::string(argv[2]) == "displacement")
         {
             std::cout << "Rasterizing using the bump shader\n";
             active_shader = displacement_fragment_shader;
+            auto texture_path = "hmap.jpg";
+            r.set_texture(Texture(obj_path + texture_path));
         }
     }
 
@@ -363,7 +393,7 @@ int main(int argc, const char** argv)
     r.set_vertex_shader(vertex_shader);
     r.set_fragment_shader(active_shader);
 
-    int key = 0;
+    int key = -1;
     int frame_count = 0;
 
     if (command_line)
@@ -383,7 +413,7 @@ int main(int argc, const char** argv)
         return 0;
     }
 
-    while(key != 27)
+    while(1)
     {
         r.clear(rst::Buffers::Color | rst::Buffers::Depth);
 
@@ -399,8 +429,11 @@ int main(int argc, const char** argv)
 
         cv::imshow("image", image);
         cv::imwrite(filename, image);
-        key = cv::waitKey(10000);
-
+        printf("frame count %d\n", ++frameC);
+        
+        while(key == -1) {
+            key = cv::waitKey(10000);
+        }
         if (key == 'a' )
         {
             angle -= 20;
@@ -408,8 +441,10 @@ int main(int argc, const char** argv)
         else if (key == 'd')
         {
             angle += 20;
+        } else if (key == 27) {
+            return 0;
         }
-        printf("frame count %d\n", ++frameC);
+        key = -1;
     }
     return 0;
 }
