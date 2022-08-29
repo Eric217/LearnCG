@@ -4,14 +4,27 @@
 
 #include <cstring>
 
-bool rayTriangleIntersect(const Vector3f& v0, const Vector3f& v1, const Vector3f& v2, const Vector3f& orig,
-                          const Vector3f& dir, float& tnear, float& u, float& v)
+static bool rayTriangleIntersect(
+    const Vector3f& v0, const Vector3f& v1, const Vector3f& v2,
+    const Vector3f& orig, const Vector3f& dir, float& tnear,
+    float& u, float& v)
 {
-    // TODO: Implement this function that tests whether the triangle
-    // that's specified bt v0, v1 and v2 intersects with the ray (whose
-    // origin is *orig* and direction is *dir*)
-    // Also don't forget to update tnear, u and v.
-    return false;
+    auto e1 = v1 - v0;
+    auto e2 = v2 - v0;
+    auto s = orig - v0;
+    auto s1 = crossProduct(dir, e2);
+    auto s2 = crossProduct(s, e1);
+    float coeff = 1.0 / (dotProduct(s1, e1));
+    auto t = coeff * dotProduct(s2, e2);
+    auto b1 = coeff * dotProduct(s1, s);
+    auto b2 = coeff * dotProduct(s2, dir);
+    if (!(t >= 0 && 1 - b1 - b2 >= 0 && b1 >= 0 && b2 >= 0)) {
+        return false;
+    }
+    tnear = t;
+    u = b1;
+    v = b2;
+    return true;
 }
 
 class MeshTriangle : public Object
