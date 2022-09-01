@@ -12,8 +12,9 @@
 int main(int argc, char** argv)
 {
     Scene scene(1280, 960);
+    /// 内部完成 bvh 初始化
     MeshTriangle bunny(BUNNY_DIR);
-
+    /// 兔子在原点
     scene.Add(&bunny);
     scene.Add(std::make_unique<Light>(Vector3f(-20, 70, 20), 1));
     scene.Add(std::make_unique<Light>(Vector3f(20, 70, 20), 1));

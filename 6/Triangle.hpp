@@ -42,9 +42,9 @@ bool rayTriangleIntersect(const Vector3f& v0, const Vector3f& v1,
 class Triangle : public Object
 {
 public:
-    Vector3f v0, v1, v2; // vertices A, B ,C , counter-clockwise order
-    Vector3f e1, e2;     // 2 edges v1-v0, v2-v0;
-    Vector3f t0, t1, t2; // texture coords
+    Vector3f v0, v1, v2; ///< vertices A, B ,C , counter-clockwise order
+    Vector3f e1, e2;     ///< 2 edges v1-v0, v2-v0;
+    Vector3f t0, t1, t2; ///< texture coords
     Vector3f normal;
     Material* m;
 
@@ -56,9 +56,6 @@ public:
         normal = normalize(crossProduct(e1, e2));
     }
 
-    bool intersect(const Ray& ray) override;
-    bool intersect(const Ray& ray, float& tnear,
-                   uint32_t& index) const override;
     Intersection getIntersection(Ray ray) override;
     void getSurfaceProperties(const Vector3f& P, const Vector3f& I,
                               const uint32_t& index, const Vector2f& uv,
@@ -126,27 +123,6 @@ public:
         bvh = new BVHAccel(ptrs);
     }
 
-    bool intersect(const Ray& ray) { return true; }
-
-    bool intersect(const Ray& ray, float& tnear, uint32_t& index) const
-    {
-        bool intersect = false;
-        for (uint32_t k = 0; k < numTriangles; ++k) {
-            const Vector3f& v0 = vertices[vertexIndex[k * 3]];
-            const Vector3f& v1 = vertices[vertexIndex[k * 3 + 1]];
-            const Vector3f& v2 = vertices[vertexIndex[k * 3 + 2]];
-            float t, u, v;
-            if (rayTriangleIntersect(v0, v1, v2, ray.origin, ray.direction, t,
-                                     u, v) &&
-                t < tnear) {
-                tnear = t;
-                index = k;
-                intersect |= true;
-            }
-        }
-
-        return intersect;
-    }
 
     Bounds3 getBounds() { return bounding_box; }
 
@@ -199,12 +175,6 @@ public:
     Material* m;
 };
 
-inline bool Triangle::intersect(const Ray& ray) { return true; }
-inline bool Triangle::intersect(const Ray& ray, float& tnear,
-                                uint32_t& index) const
-{
-    return false;
-}
 
 inline Bounds3 Triangle::getBounds() { return Union(Bounds3(v0, v1), v2); }
 
@@ -230,11 +200,15 @@ inline Intersection Triangle::getIntersection(Ray ray)
     if (v < 0 || u + v > 1)
         return inter;
     t_tmp = dotProduct(e2, qvec) * det_inv;
-
-    // TODO find ray triangle intersection
-
-
-
+    if (t_tmp < 0) {
+        return inter;
+    }
+    inter.obj = this;
+    inter.distance = t_tmp;
+    inter.happened = true;
+    inter.coords = ray(t_tmp);
+    inter.m = this->m;
+    inter.normal = this->normal;
 
     return inter;
 }

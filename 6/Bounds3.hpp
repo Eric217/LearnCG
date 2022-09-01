@@ -8,6 +8,7 @@
 #include "Vector.hpp"
 #include <limits>
 #include <array>
+#include <math.h>
 
 class Bounds3
 {
@@ -74,7 +75,7 @@ class Bounds3
         return (x && y && z);
     }
 
-    bool Inside(const Vector3f& p, const Bounds3& b)
+    inline bool Inside(const Vector3f& p, const Bounds3& b) const
     {
         return (p.x >= b.pMin.x && p.x <= b.pMax.x && p.y >= b.pMin.y &&
                 p.y <= b.pMax.y && p.z >= b.pMin.z && p.z <= b.pMax.z);
@@ -91,12 +92,42 @@ class Bounds3
 
 
 inline bool Bounds3::IntersectP(const Ray& ray, const Vector3f& invDir,
-                                const std::array<int, 3>& dirIsNeg) const
+                                const std::array<int, 3>& dirIsPos) const
 {
     // invDir: ray direction(x,y,z), invDir=(1.0/x,1.0/y,1.0/z), use this because Multiply is faster that Division
     // dirIsNeg: ray direction(x,y,z), dirIsNeg=[int(x>0),int(y>0),int(z>0)], use this to simplify your logic
-    // TODO test if ray bound intersects
+    auto& origin = ray.origin;
+    if (this->Inside(ray.origin, *this)) {
+        return true;
+    }
+    auto pMinx = pMin.x;
+    auto pMaxx = pMax.x;
+    if (!dirIsPos[0]) {
+        std::swap(pMinx, pMaxx);
+    }
+
+    float tMin = (pMinx - origin.x) * invDir.x;
+    float tMax = (pMaxx - origin.x) * invDir.x;
     
+    pMinx = pMin.y;
+    pMaxx = pMax.y;
+    if (!dirIsPos[1]) {
+        std::swap(pMinx, pMaxx);
+    }
+ 
+    tMin = std::max(tMin, (pMinx - origin.y) * invDir.y);
+    tMax = std::min(tMax, (pMaxx - origin.y) * invDir.y);
+ 
+    pMinx = pMin.z;
+    pMaxx = pMax.z;
+    if (!dirIsPos[2]) {
+        std::swap(pMinx, pMaxx);
+    }
+     
+    tMin = std::max(tMin, (pMinx - origin.z) * invDir.z);
+    tMax = std::min(tMax, (pMaxx - origin.z) * invDir.z);
+    
+    return tMin < tMax && tMax >= 0;
 }
 
 inline Bounds3 Union(const Bounds3& b1, const Bounds3& b2)

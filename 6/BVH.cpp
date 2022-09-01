@@ -29,10 +29,6 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
 {
     BVHBuildNode* node = new BVHBuildNode();
 
-    // Compute bounds of all primitives in BVH node
-    Bounds3 bounds;
-    for (int i = 0; i < objects.size(); ++i)
-        bounds = Union(bounds, objects[i]->getBounds());
     if (objects.size() == 1) {
         // Create leaf _BVHBuildNode_
         node->bounds = objects[0]->getBounds();
@@ -82,7 +78,8 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
         auto leftshapes = std::vector<Object*>(beginning, middling);
         auto rightshapes = std::vector<Object*>(middling, ending);
 
-        assert(objects.size() == (leftshapes.size() + rightshapes.size()));
+        assert(leftshapes.size() && rightshapes.size() &&
+               objects.size() == (leftshapes.size() + rightshapes.size()));
 
         node->left = recursiveBuild(leftshapes);
         node->right = recursiveBuild(rightshapes);
@@ -104,6 +101,25 @@ Intersection BVHAccel::Intersect(const Ray& ray) const
 
 Intersection BVHAccel::getIntersection(BVHBuildNode* node, const Ray& ray) const
 {
-    // TODO Traverse the BVH to find intersection
-
+    std::array<int, 3> dirDir = {
+        ray.direction.x > 0, ray.direction.y > 0, ray.direction.z > 0
+    };
+    if (!node->bounds.IntersectP(ray, ray.direction_inv, dirDir)) {
+        return Intersection();
+    }
+    // case leaf
+    if (node->object) {
+        return node->object->getIntersection(ray);
+    } else {
+        assert(node->left && node->right);
+    }
+    auto result1 = getIntersection(node->left, ray);
+    auto result2 = getIntersection(node->right, ray);
+    if (!result1.happened) {
+        return result2;
+    }
+    if (!result2.happened) {
+        return result1;
+    }
+    return result1.distance < result2.distance ? result1 : result2;
 }

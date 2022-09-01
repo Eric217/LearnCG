@@ -15,27 +15,6 @@ Intersection Scene::intersect(const Ray &ray) const
     return this->bvh->Intersect(ray);
 }
 
-bool Scene::trace(
-        const Ray &ray,
-        const std::vector<Object*> &objects,
-        float &tNear, uint32_t &index, Object **hitObject)
-{
-    *hitObject = nullptr;
-    for (uint32_t k = 0; k < objects.size(); ++k) {
-        float tNearK = kInfinity;
-        uint32_t indexK;
-        Vector2f uvK;
-        if (objects[k]->intersect(ray, tNearK, indexK) && tNearK < tNear) {
-            *hitObject = objects[k];
-            tNear = tNearK;
-            index = indexK;
-        }
-    }
-
-
-    return (*hitObject != nullptr);
-}
-
 // Implementation of the Whitted-syle light transport algorithm (E [S*] (D|G) L)
 //
 // This function is the function that compute the color at the intersection point
@@ -126,11 +105,20 @@ Vector3f Scene::castRay(const Ray &ray, int depth) const
                         float lightDistance2 = dotProduct(lightDir, lightDir);
                         lightDir = normalize(lightDir);
                         float LdotN = std::max(0.f, dotProduct(lightDir, N));
-                        Object *shadowHitObject = nullptr;
-                        float tNearShadow = kInfinity;
                         // is the point in shadow, and is the nearest occluding object closer to the object than the light itself?
-                        bool inShadow = bvh->Intersect(Ray(shadowPointOrig, lightDir)).happened;
-                        lightAmt += (1 - inShadow) * get_lights()[i]->intensity * LdotN;
+                        auto shadowO = bvh->Intersect(Ray(shadowPointOrig, lightDir));
+                        bool inShadow = shadowO.happened;
+                        if (inShadow && shadowO.distance * shadowO.distance > lightDistance2) {
+                            inShadow = false;
+                            assert(false);
+                        }
+                        if (!inShadow) {
+                            lightAmt += get_lights()[i]->intensity * LdotN;
+                        }
+                        if (!inShadow) {
+                            ;
+                         }
+                      
                         Vector3f reflectionDirection = reflect(-lightDir, N);
                         specularColor += powf(std::max(0.f, -dotProduct(reflectionDirection, ray.direction)),
                                               m->specularExponent) * get_lights()[i]->intensity;
