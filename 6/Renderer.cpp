@@ -48,9 +48,7 @@ void Renderer::Render(const Scene& scene)
             // Don't forget to normalize this direction!
 
         }
-        UpdateProgress(j / (float)bufferH);
     }
-    UpdateProgress(1.f);
 
     // save framebuffer to file
     FILE* fp = fopen("binary.ppm", "wb");

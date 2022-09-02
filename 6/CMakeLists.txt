@@ -23,4 +23,5 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${DEMO_RESOURCES})
 
 target_compile_definitions(RayTracing PRIVATE
     BUNNY_DIR="${BUNNY_DIR}"
+    DEFAULT_SPLIT_METHOD=SAH
 )

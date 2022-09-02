@@ -11,6 +11,8 @@
 #include "Ray.hpp"
 #include "Intersection.hpp"
 
+//#include <unordered_map>
+
 class Object
 {
 public:
@@ -20,6 +22,8 @@ public:
     virtual void getSurfaceProperties(const Vector3f &, const Vector3f &, const uint32_t &, const Vector2f &, Vector3f &, Vector2f &) const = 0;
     virtual Vector3f evalDiffuseColor(const Vector2f &) const =0;
     virtual Bounds3 getBounds()=0;
+    
+    //std::unordered_map<std::string, double> doubleStorage;
 };
 
 

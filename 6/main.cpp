@@ -27,9 +27,13 @@ int main(int argc, char** argv)
     auto stop = std::chrono::system_clock::now();
 
     std::cout << "Render complete: \n";
-    std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::hours>(stop - start).count() << " hours\n";
-    std::cout << "          : " << std::chrono::duration_cast<std::chrono::minutes>(stop - start).count() << " minutes\n";
-    std::cout << "          : " << std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() << " seconds\n";
+    std::cout << "Time taken: " <<   std::chrono::duration_cast<std::chrono::minutes>(stop - start).count() % 60 << " minutes\n";
+    
+    auto secondsOutput = std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() % 60;
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() % 1000;
 
+    std::cout << "          : " << secondsOutput << " seconds\n";
+    std::cout << "          : " << ms << " millseconds\n";
+    
     return 0;
 }

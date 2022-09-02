@@ -15,6 +15,10 @@
 #include "Intersection.hpp"
 #include "Vector.hpp"
 
+// cmake 预设用 SAH，如果想换则新写一个
+// #undef DEFAULT_SPLIT_METHOD
+// #define DEFAULT_SPLIT_METHOD SAH
+
 struct BVHBuildNode;
 // BVHAccel Forward Declarations
 struct BVHPrimitiveInfo;
@@ -28,7 +32,7 @@ public:
     enum class SplitMethod { NAIVE, SAH };
 
     // BVHAccel Public Methods
-    BVHAccel(std::vector<Object*> p, int maxPrimsInNode = 1, SplitMethod splitMethod = SplitMethod::NAIVE);
+    BVHAccel(std::vector<Object*> p, int maxPrimsInNode = 1, SplitMethod splitMethod = SplitMethod::DEFAULT_SPLIT_METHOD);
     Bounds3 WorldBound() const;
     ~BVHAccel();
 
@@ -39,6 +43,7 @@ public:
 
     // BVHAccel Private Methods
     BVHBuildNode* recursiveBuild(std::vector<Object*>objects);
+    BVHBuildNode* recursiveBuildWithSAH(std::vector<Object*>objects);
 
     // BVHAccel Private Data
     const int maxPrimsInNode;

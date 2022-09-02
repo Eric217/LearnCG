@@ -7,22 +7,31 @@ BVHAccel::BVHAccel(std::vector<Object*> p, int maxPrimsInNode,
     : maxPrimsInNode(std::min(255, maxPrimsInNode)), splitMethod(splitMethod),
       primitives(std::move(p))
 {
-    time_t start, stop;
-    time(&start);
+    
+    
+    auto start = std::chrono::system_clock::now();
+   
     if (primitives.empty())
         return;
+    switch (splitMethod) {
+        case SplitMethod::NAIVE:
+            root = recursiveBuild(primitives);
+            break;
+        case SplitMethod::SAH:
+            root = recursiveBuildWithSAH(primitives);
+            break;
+    }
+    
+    auto stop = std::chrono::system_clock::now();
+    
+    const char *methodName = splitMethod == SplitMethod::NAIVE ? "BVH" : "BVH-SAH";
+    std::cout << methodName << " constructed: \n";
+     
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() % 60;
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() % 1000;
 
-    root = recursiveBuild(primitives);
-
-    time(&stop);
-    double diff = difftime(stop, start);
-    int hrs = (int)diff / 3600;
-    int mins = ((int)diff / 60) - (hrs * 60);
-    int secs = (int)diff - (hrs * 3600) - (mins * 60);
-
-    printf(
-        "\rBVH Generation complete: \nTime Taken: %i hrs, %i mins, %i secs\n\n",
-        hrs, mins, secs);
+    std::cout << "            " << s << " seconds\n";
+    std::cout << "            " << ms << " millseconds\n"; 
 }
 
 BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
@@ -87,6 +96,132 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
         node->bounds = Union(node->left->bounds, node->right->bounds);
     }
 
+    return node;
+}
+
+struct SAHBucket {
+    Bounds3 box;
+    int N = 0;
+    std::vector<Object *> objects;
+    //float surfaceArea = 0;
+    float min = 0;
+    float max = 0;
+};
+
+BVHBuildNode* BVHAccel::recursiveBuildWithSAH(std::vector<Object*> objects)
+{
+    BVHBuildNode* node = new BVHBuildNode();
+
+    if (objects.size() == 1) {
+        // Create leaf _BVHBuildNode_
+        node->bounds = objects[0]->getBounds();
+        node->object = objects[0];
+        node->left = nullptr;
+        node->right = nullptr;
+        return node;
+    }
+    else if (objects.size() == 2) {
+        node->left = recursiveBuildWithSAH(std::vector{objects[0]});
+        node->right = recursiveBuildWithSAH(std::vector{objects[1]});
+
+        node->bounds = Union(node->left->bounds, node->right->bounds);
+        return node;
+    }
+    Bounds3 *cacheBounds = (Bounds3 *)calloc(objects.size(), sizeof(Bounds3));
+    Vector3f *cacheCenter = new Vector3f[objects.size()];
+    
+     
+    // find min of: Na * Sa / Sn
+    //double SN = 0;
+    for (int i = 0; i < objects.size(); ++i) {
+        cacheBounds[i] = std::move(objects[i]->getBounds());
+        cacheCenter[i] = std::move(cacheBounds[i].Centroid());
+       // auto sa = cacheBounds[i].SurfaceArea();
+        //objects[i]->doubleStorage["sa"] = sa;
+       // SN += sa;
+    }
+   // auto SN_i = 1 / SN;
+     
+   
+    Bounds3 bounds;
+    for (int i = 0; i < objects.size(); ++i)
+        bounds.unionBounds(cacheBounds[i]);
+    
+    const auto BucketCount = 18;
+    SAHBucket *buckets = new SAHBucket[BucketCount];
+    auto cost = kInfinity;
+    std::vector<Object *> v1, v2;
+    
+    for (int axis = 0; axis < 3; axis++) {
+        // 用任一个轴初始化桶空间
+        const auto min = bounds.pMin[axis];
+        const auto max = bounds.pMax[axis];
+        
+        auto share = (max - min) / BucketCount;
+        auto base = min;
+        for (int i = 0; i < BucketCount; i++) {
+            buckets[i].min = base;
+            buckets[i].max = (base += share);
+            buckets[i].box = Bounds3();
+            buckets[i].N = 0;
+            buckets[i].objects.clear();
+        }
+        // 把 obj 放到相应的桶里
+        for (int i = 0; i < objects.size(); ++i) {
+            auto center = cacheCenter[i][axis];
+
+            for (int b = 0; b < BucketCount; b++) {
+                if (center >= buckets[b].min && center <= buckets[b].max) {
+                    // found bucket for obj
+                    buckets[b].N ++;
+                    buckets[b].box.unionBounds(cacheBounds[i]);
+                    buckets[b].objects.push_back(objects[i]);
+                    //buckets[b].surfaceArea += objects[i]->doubleStorage["sa"];
+                    break;
+                }
+            }
+        }
+        // 划分 b - 1 次得出最优
+        for (int i = 0; i < BucketCount - 1; i++) {
+            // 下标 <= i 的桶是一组，剩下的在另一组
+            Bounds3 left, right;
+            int Nl = 0, Nr = 0;
+            for (int b = 0; b <= i; b++) {
+                left.unionBounds(buckets[b].box);
+                Nl += buckets[b].N;
+            }
+            for (int b = i + 1; b < BucketCount; b++) {
+                right.unionBounds(buckets[b].box);
+                Nr += buckets[b].N;
+            }
+            auto costL = left.SurfaceArea() * Nl;
+            auto costR = right.SurfaceArea() * Nr;
+            float _cost = costL + costR; // real is: kCost + Ct
+            if (_cost < cost) {
+                cost = _cost;
+                v1.clear();
+                v2.clear();
+                for (int b = 0; b <= i; b++) {
+                    v1.insert(v1.end(), buckets[b].objects.begin(), buckets[b].objects.end());
+                }
+                for (int b = i + 1; b < BucketCount; b++) {
+                    v2.insert(v2.end(), buckets[b].objects.begin(), buckets[b].objects.end());
+                }
+            }
+        }
+    }
+    assert(v1.size() && v2.size() &&
+           objects.size() == (v1.size() + v2.size()));
+
+    node->left = recursiveBuild(v1);
+    node->right = recursiveBuild(v2);
+
+    node->bounds = Union(node->left->bounds, node->right->bounds);
+     
+    delete [] buckets;
+    free(cacheBounds);
+    delete [] cacheCenter;
+    
     return node;
 }
 

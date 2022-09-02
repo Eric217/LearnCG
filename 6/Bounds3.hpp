@@ -87,6 +87,11 @@ class Bounds3
 
     inline bool IntersectP(const Ray& ray, const Vector3f& invDir,
                            const std::array<int, 3>& dirisNeg) const;
+    
+    inline void unionBounds(const Bounds3 &other) {
+        pMin = Vector3f::Min(pMin, other.pMin);
+        pMax = Vector3f::Max(pMax, other.pMax);
+    }
 };
 
 
@@ -108,7 +113,9 @@ inline bool Bounds3::IntersectP(const Ray& ray, const Vector3f& invDir,
 
     float tMin = (pMinx - origin.x) * invDir.x;
     float tMax = (pMaxx - origin.x) * invDir.x;
-    
+    if (tMin >= tMax || tMax < 0) {
+        return false;
+    }
     pMinx = pMin.y;
     pMaxx = pMax.y;
     if (!dirIsPos[1]) {
@@ -117,7 +124,9 @@ inline bool Bounds3::IntersectP(const Ray& ray, const Vector3f& invDir,
  
     tMin = std::max(tMin, (pMinx - origin.y) * invDir.y);
     tMax = std::min(tMax, (pMaxx - origin.y) * invDir.y);
- 
+    if (tMin >= tMax || tMax < 0) {
+        return false;
+    }
     pMinx = pMin.z;
     pMaxx = pMax.z;
     if (!dirIsPos[2]) {
