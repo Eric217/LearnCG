@@ -107,27 +107,27 @@ public:
     inline float pdf(const Vector3f &wi, const Vector3f &wo, const Vector3f &N);
     // given a ray, calculate the contribution of this ray
     inline Vector3f eval(const Vector3f &wi, const Vector3f &wo, const Vector3f &N);
-
+private:
+    bool _hasEmission;
+    
 };
 
 Material::Material(MaterialType t, Vector3f e){
     m_type = t;
-    //m_color = c;
     m_emission = e;
+    _hasEmission = m_emission.norm() > EPSILON;
 }
 
 MaterialType Material::getType(){return m_type;}
-///Vector3f Material::getColor(){return m_color;}
 Vector3f Material::getEmission() {return m_emission;}
+
 bool Material::hasEmission() {
-    if (m_emission.norm() > EPSILON) return true;
-    else return false;
+    return _hasEmission;
 }
 
 Vector3f Material::getColorAt(double u, double v) {
     return Vector3f();
 }
-
 
 Vector3f Material::sample(const Vector3f &wi, const Vector3f &N){
     switch(m_type){

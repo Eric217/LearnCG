@@ -54,8 +54,9 @@ public:
     {
         e1 = v1 - v0;
         e2 = v2 - v0;
-        normal = normalize(crossProduct(e1, e2));
-        area = crossProduct(e1, e2).norm()*0.5f;
+        auto cP = crossProduct(e1, e2);
+        normal = normalize(cP);
+        area = cP.norm()*0.5f;
     }
 
     bool intersect(const Ray& ray) override;
@@ -72,16 +73,17 @@ public:
     }
     Vector3f evalDiffuseColor(const Vector2f&) const override;
     Bounds3 getBounds() override;
-    void Sample(Intersection &pos, float &pdf){
+    void Sample(Intersection &pos, float &pdf) override {
         float x = std::sqrt(get_random_float()), y = get_random_float();
         pos.coords = v0 * (1.0f - x) + v1 * (x * (1.0f - y)) + v2 * (x * y);
         pos.normal = this->normal;
+        pos.obj = this;
         pdf = 1.0f / area;
     }
-    float getArea(){
+    float getArea() override {
         return area;
     }
-    bool hasEmit(){
+    bool hasEmit() override {
         return m->hasEmission();
     }
 };
@@ -89,7 +91,7 @@ public:
 class MeshTriangle : public Object
 {
 public:
-    MeshTriangle(const std::string& filename, Material *mt = new Material())
+    MeshTriangle(const std::string& filename, Material *mt = new Material(), const Vector3f& scale = Vector3f(1, 1, 1), const Vector3f& offset = Vector3f())
     {
         objl::Loader loader;
         loader.LoadFile(filename);
@@ -108,9 +110,9 @@ public:
             std::array<Vector3f, 3> face_vertices;
 
             for (int j = 0; j < 3; j++) {
-                auto vert = Vector3f(mesh.Vertices[i + j].Position.X,
-                                     mesh.Vertices[i + j].Position.Y,
-                                     mesh.Vertices[i + j].Position.Z);
+                auto vert = Vector3f(mesh.Vertices[i + j].Position.X * scale.x + offset.x,
+                                     mesh.Vertices[i + j].Position.Y * scale.y + offset.y,
+                                     mesh.Vertices[i + j].Position.Z * scale.z + offset.z);
                 face_vertices[j] = vert;
 
                 min_vert = Vector3f(std::min(min_vert.x, vert.x),
@@ -251,8 +253,15 @@ inline Intersection Triangle::getIntersection(Ray ray)
     if (v < 0 || u + v > 1)
         return inter;
     t_tmp = dotProduct(e2, qvec) * det_inv;
-
-    // TODO find ray triangle intersection
+    if (t_tmp < 0) {
+        return inter;
+    }
+    inter.obj = this;
+    inter.distance = t_tmp;
+    inter.happened = true;
+    inter.coords = ray(t_tmp);
+    inter.m = this->m;
+    inter.normal = this->normal;
 
     return inter;
 }

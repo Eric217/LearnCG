@@ -1,0 +1,3 @@
+[submodule "thirdparty/threadpool"]
+	path = thirdparty/threadpool
+	url = git@github.com:Eric217/threadpool.git

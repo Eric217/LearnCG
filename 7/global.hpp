@@ -51,3 +51,24 @@ inline void UpdateProgress(float progress)
     std::cout << "] " << int(progress * 100.0) << " %\r";
     std::cout.flush();
 };
+#if defined(__GNUC__)
+#   if !defined(UNLIKELY)
+#       define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#   endif
+#   if !defined(LIKELY)
+#       define LIKELY(x) __builtin_expect(!!(x), 1)
+#   endif
+#else
+#   if !defined(UNLIKELY)
+#       define UNLIKELY(x) (x)
+#   endif
+#   if !defined(LIKELY)
+#       define LIKELY(x) (x)
+#   endif
+#endif
+
+inline void pauseWhen(bool expression) {
+    if (__builtin_expect(expression, 0)) {
+        (void)0; // 用来打断点
+    }
+}

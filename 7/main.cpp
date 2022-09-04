@@ -15,6 +15,8 @@ int main(int argc, char** argv)
 
     // Change the definition here to change resolution
     Scene scene(784, 784);
+//    Scene scene(400, 400);
+//    Scene scene(200, 200);
 
     Material* red = new Material(DIFFUSE, Vector3f(0.0f));
     red->Kd = Vector3f(0.63f, 0.065f, 0.05f);
@@ -25,16 +27,27 @@ int main(int argc, char** argv)
     Material* light = new Material(DIFFUSE, (8.0f * Vector3f(0.747f+0.058f, 0.747f+0.258f, 0.747f) + 15.6f * Vector3f(0.740f+0.287f,0.740f+0.160f,0.740f) + 18.4f *Vector3f(0.737f+0.642f,0.737f+0.159f,0.737f)));
     light->Kd = Vector3f(0.65f);
 
-    MeshTriangle floor("../models/cornellbox/floor.obj", white);
-    MeshTriangle shortbox("../models/cornellbox/shortbox.obj", white);
-    MeshTriangle tallbox("../models/cornellbox/tallbox.obj", white);
-    MeshTriangle left("../models/cornellbox/left.obj", red);
-    MeshTriangle right("../models/cornellbox/right.obj", green);
-    MeshTriangle light_("../models/cornellbox/light.obj", light);
+    std::string cornell_dir = CORNELL_DIR;
+    cornell_dir.append("/");
+    
+    MeshTriangle floor(cornell_dir + "floor.obj", white);
+    //MeshTriangle shortbox(cornell_dir + "shortbox.obj", white);
+    //MeshTriangle tallbox(cornell_dir + "tallbox.obj", white);
+    MeshTriangle left(cornell_dir + "left.obj", red);
+    MeshTriangle right(cornell_dir + "right.obj", green);
+    MeshTriangle light_(cornell_dir + "light.obj", light);
 
+    Material* whiteBunny = new Material(DIFFUSE, Vector3f(0.0f));
+    whiteBunny->Kd = Vector3f(0.98f, 0.98f, 0.98f);
+    MeshTriangle bunny(BUNNY_PATH, whiteBunny, 1500, Vector3f(200, -60, 320));
+    scene.Add(&bunny);
+    
+    MeshTriangle cow(COW_PATH, whiteBunny, 232, Vector3f(400, 138, 350));
+    scene.Add(&cow);
+    
     scene.Add(&floor);
-    scene.Add(&shortbox);
-    scene.Add(&tallbox);
+   // scene.Add(&shortbox);
+   // scene.Add(&tallbox);
     scene.Add(&left);
     scene.Add(&right);
     scene.Add(&light_);
@@ -48,9 +61,13 @@ int main(int argc, char** argv)
     auto stop = std::chrono::system_clock::now();
 
     std::cout << "Render complete: \n";
-    std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::hours>(stop - start).count() << " hours\n";
-    std::cout << "          : " << std::chrono::duration_cast<std::chrono::minutes>(stop - start).count() << " minutes\n";
-    std::cout << "          : " << std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() << " seconds\n";
+    std::cout << "Time taken: " <<   std::chrono::duration_cast<std::chrono::minutes>(stop - start).count() % 60 << " minutes\n";
+    
+    auto ss = std::chrono::duration_cast<std::chrono::seconds>(stop - start).count() % 60;
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() % 1000;
 
+    std::cout << "          : " << ss << " seconds\n";
+    std::cout << "          : " << ms << " millseconds\n";
+    
     return 0;
 }

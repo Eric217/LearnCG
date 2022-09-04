@@ -7,8 +7,6 @@ BVHAccel::BVHAccel(std::vector<Object*> p, int maxPrimsInNode,
     : maxPrimsInNode(std::min(255, maxPrimsInNode)), splitMethod(splitMethod),
       primitives(std::move(p))
 {
-    
-    
     auto start = std::chrono::system_clock::now();
    
     if (primitives.empty())

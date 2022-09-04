@@ -83,6 +83,7 @@ public:
         pos.coords = center + radius * dir;
         pos.normal = dir;
         pos.emit = m->getEmission();
+        pos.obj = this;
         pdf = 1.0f / area;
     }
     float getArea(){
