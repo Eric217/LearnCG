@@ -31,23 +31,23 @@ int main(int argc, char** argv)
     cornell_dir.append("/");
     
     MeshTriangle floor(cornell_dir + "floor.obj", white);
-    //MeshTriangle shortbox(cornell_dir + "shortbox.obj", white);
-    //MeshTriangle tallbox(cornell_dir + "tallbox.obj", white);
+    MeshTriangle shortbox(cornell_dir + "shortbox.obj", white);
+    MeshTriangle tallbox(cornell_dir + "tallbox.obj", white);
     MeshTriangle left(cornell_dir + "left.obj", red);
     MeshTriangle right(cornell_dir + "right.obj", green);
     MeshTriangle light_(cornell_dir + "light.obj", light);
 
-    Material* whiteBunny = new Material(DIFFUSE, Vector3f(0.0f));
-    whiteBunny->Kd = Vector3f(0.98f, 0.98f, 0.98f);
-    MeshTriangle bunny(BUNNY_PATH, whiteBunny, 1500, Vector3f(200, -60, 320));
-    scene.Add(&bunny);
-    
-    MeshTriangle cow(COW_PATH, whiteBunny, 232, Vector3f(400, 138, 350));
-    scene.Add(&cow);
+//    Material* whiteBunny = new Material(DIFFUSE, Vector3f(0.0f));
+//    whiteBunny->Kd = Vector3f(0.98f, 0.98f, 0.98f);
+//    MeshTriangle bunny(BUNNY_PATH, whiteBunny, 1500, Vector3f(200, -60, 320));
+//    scene.Add(&bunny);
+//
+//    MeshTriangle cow(COW_PATH, whiteBunny, 232, Vector3f(400, 138, 350));
+//    scene.Add(&cow);
     
     scene.Add(&floor);
-   // scene.Add(&shortbox);
-   // scene.Add(&tallbox);
+    scene.Add(&shortbox);
+    scene.Add(&tallbox);
     scene.Add(&left);
     scene.Add(&right);
     scene.Add(&light_);
