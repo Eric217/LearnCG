@@ -139,7 +139,7 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     for (auto& light : lights)
     {
         result_color += ka.cwiseProduct(amb_light_intensity);
-        
+        // 下面计算时 世界空间坐标和view空间坐标混用了，以后改
         Vector3f D(0,0,0), S(0,0,0);
         auto l = light.position - point;
         auto r2 = l.squaredNorm();
@@ -148,6 +148,10 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
         float costheta = ln.dot(nn);
         if (costheta > 0) {
             D = light.intensity.cwiseProduct(kd) / r2 * costheta;
+            // 使用半程向量 half-way 的优点是，除了课里说的减少一个运算，
+            // 最重要的是能避免低 shininess 时、如果用反射向量 个别 cos < 0 情况带来的 artifact。使用半程，平面上方任意角度看 与法线都是锐角；
+            // 使用半程/反射向量是 Blinn-Phone 和 Phone 模型的唯一区别。
+            // 此外，如果从背面看，不应该看到高光（需要再筛一波；如果也不给看 amb、diffuse，那就是不让看背面）
             float h = (ln + v.normalized()).normalized().dot(nn);
             S = light.intensity.cwiseProduct(ks) / r2 * std::pow(h > 0 ? h : 0, p);
             result_color += D + S;

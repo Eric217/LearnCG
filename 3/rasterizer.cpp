@@ -177,6 +177,13 @@ static float min3(float a, float b, float c) {
 static float max3(float a, float b, float c) {
     return std::max(std::max(a, b), c);
 }
+
+static bool inNDC(const Vector4f& vec) {
+    return vec.x() >= -1 && vec.x() <= 1
+    && vec.y() >= -1 && vec.y() <= 1
+    && vec.z() >= -1 && vec.z() <= 1;
+}
+
 static bool pointInside(float x, float y, const Triangle& t);
 
 void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
@@ -212,6 +219,11 @@ void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
             vec.y()/=vec.w();
             vec.z()/=vec.w();
         }
+        // 简单裁剪一下，当三个点都不在 NDC 中就忽略这个三角形
+        if (!(inNDC(v[0]) && inNDC(v[1]) && inNDC(v[2]))) {
+            continue;
+        }
+        
         // 切线 MV 变换后仍保存 tangent，但是法线没有这个性质。
         // 我们知道 T*N = 0，T‘ * N’ still = 0，即 M*T * M‘N = 0，现在推理 M‘
         // 必须转置才能乘，(M*T)t * M’N = 0，Tt * Mt * M’ * N = 0，
