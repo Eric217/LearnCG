@@ -7,6 +7,10 @@
 #include <opencv2/opencv.hpp>
 #include <math.h>
 
+template<typename T>
+T square(T var) {
+    return var * var;
+}
 
 rst::pos_buf_id rst::rasterizer::load_positions(const std::vector<Eigen::Vector3f> &positions)
 {
@@ -241,7 +245,8 @@ void rst::rasterizer::draw(std::vector<Triangle *> &TriangleList) {
         {
             vert.x() = 0.5*width*(vert.x()+1.0);
             vert.y() = 0.5*height*(vert.y()+1.0);
-            vert.z() = vert.z() * f1 + f2;
+            // 这里对 z 的处理实际后面没用到，不处理也照样做 zbuffer
+            // vert.z() = (vert.z() + 1) * 0.5;
         }
 
         for (int i = 0; i < 3; ++i)
@@ -281,6 +286,31 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
     return Eigen::Vector2f(u, v);
 }
 
+static const Vector2f MSAA_SAMPLE_LOCATIONS_4[4] = {
+    {0.24, 0.19},
+    {0.76, 0.23},
+    {0.15, 0.76},
+    {0.78, 0.83}
+};
+static const Vector2f MSAA_SAMPLE_LOCATIONS_8[8] = {
+    {0.15, 0.35},
+    {0.35, 0.15},
+    {1-0.35, 0.15},
+    {1-0.15, 0.35},
+    
+    {1-0.15, 1-0.35},
+    {1-0.35, 1-0.15},
+    {0.35, 1-0.15},
+    {0.15, 1-0.35},
+};
+ 
+static std::map<int, const Vector2f*>MSAA_SAMPLE_LOCATIONS_ARR = {
+    {4, MSAA_SAMPLE_LOCATIONS_4},
+    {8, MSAA_SAMPLE_LOCATIONS_8},
+};
+
+#define _MSAA_SAMPLE_LOCATIONS MSAA_SAMPLE_LOCATIONS_ARR[MSAA_SAMPLES]
+
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
@@ -290,30 +320,77 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
     auto maxX = (int)std::ceil(std::max(std::max(v[0].x(), v[1].x()), v[2].x()));
     auto minY = (int)std::floor(min3(v[0].y(), v[1].y(), v[2].y()));
     auto maxY = (int)std::ceil(max3(v[0].y(), v[1].y(), v[2].y()));
+    auto MSAA_SAMPLE_LOCATIONS = _MSAA_SAMPLE_LOCATIONS;
     
     float targetX;
     float targetY;
+    std::array<bool, MSAA_SAMPLES> isInside;
+    
     for (int i = minX; i <= maxX; i++) {
         for (int j = minY; j <= maxY; j++) {
             // [i][j]
             targetX = i + 0.5;
             targetY = j + 0.5;
+            uint8_t insideCount = 0;
             
-            auto isInside = pointInside(targetX, targetY, t);
-            if (!isInside) {
+            for (int k = 0; k < MSAA_SAMPLES; k++) {
+                isInside[k] = pointInside(i + MSAA_SAMPLE_LOCATIONS[k].x(),
+                                          j + MSAA_SAMPLE_LOCATIONS[k].y(), t);
+                if (!isInside[k])
+                    continue;
+                auto [alpha, beta, gamma] = computeBarycentric2D(
+                                     i + MSAA_SAMPLE_LOCATIONS[k].x(),
+                                     j + MSAA_SAMPLE_LOCATIONS[k].y(), t.v);
+                auto newA = alpha / v[0].w();
+                auto newB = beta / v[1].w();
+                auto newG = gamma / v[2].w();
+                
+                float Z = (newA + newB + newG);
+                float z_interpolated = (newA * v[0].z() + newB * v[1].z() + newG * v[2].z()) / Z;
+                if (!setDepth(i, j, k, z_interpolated)) {
+                    isInside[k] = false;
+                    continue;
+                }
+                insideCount += 1;
+            }
+            if (!insideCount) {
                 continue;
             }
+            // 判断是采样中心还是某个点
+            
+            if (pointInside(targetX, targetY, t)) {
+                
+            } else if (insideCount == 1) {
+                for (int k = 0; k < MSAA_SAMPLES; k++) {
+                    if (isInside[k]) {
+                        targetX = i + MSAA_SAMPLE_LOCATIONS[k].x();
+                        targetY = j + MSAA_SAMPLE_LOCATIONS[k].y();
+                        break;
+                    }
+                }
+            } else {
+                float distance = 2;
+                int usingSample = -1;
+                for (int k = 0; k < MSAA_SAMPLES; k++) {
+                    if (isInside[k]) {
+                        float v = square(0.5 - MSAA_SAMPLE_LOCATIONS[k].x()) +
+                        square(0.5 - MSAA_SAMPLE_LOCATIONS[k].y());
+                        if (v < distance) {
+                            distance = v;
+                            usingSample = k;
+                        }
+                    }
+                }
+                targetX = i + MSAA_SAMPLE_LOCATIONS[usingSample].x();
+                targetY = j + MSAA_SAMPLE_LOCATIONS[usingSample].y();
+            }
+           
             auto [alpha, beta, gamma] = computeBarycentric2D(targetX, targetY, t.v);
-            // 前面齐次空间变屏幕空间 重心坐标被除以 w，所以现在屏幕空间的重心坐标按新的插值
             auto newA = alpha / v[0].w();
             auto newB = beta / v[1].w();
             auto newG = gamma / v[2].w();
-            
             float Z = (newA + newB + newG);
-            float z_interpolated = (newA * v[0].z() + newB * v[1].z() + newG * v[2].z()) / Z;
-            if (!setDepth(i, j, z_interpolated)) {
-                continue;
-            }
+            
             Vector3f i_color = (newA * t.color[0] + newB * t.color[1] + newG * t.color[2]) / Z;
             Vector3f i_normal = (newA * t.normal[0] + newB * t.normal[1] + newG * t.normal[2]) / Z;
             Vector2f i_texcoords = (newA * t.tex_coords[0] + newB * t.tex_coords[1] + newG * t.tex_coords[2]) / Z;
@@ -326,17 +403,33 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
             payload.view_pos = i_view_pos;
             
             auto pixel_color = fragment_shader(payload);
-            
-            Eigen::Vector2i point(i, j);
-            set_pixel(point, pixel_color);
+             
+            for (int k = 0; k < MSAA_SAMPLES; k++) {
+                if (isInside[k]) {
+                    set_pixel(i, j, k, pixel_color);
+                }
+            }
         }
     }
 }
 
-bool rst::rasterizer::setDepth(int x, int y, float z) {
+void rst::rasterizer::resolveMSAA() {
+    int total = frame_buf.size();
+    float sampleWeight = 1.f / MSAA_SAMPLES;
+    
+    for (int i = 0; i < total; i++) {
+        Vector3f total{0, 0, 0};
+        for (int j = 0; j < MSAA_SAMPLES; j++) {
+            total += frame_buf[i][j];
+        }
+        display_buf[i] = total * sampleWeight;
+    } 
+}
+
+bool rst::rasterizer::setDepth(int x, int y, int k, float z) {
     auto p = get_index(x, y);
-    if (depth_buf[p] > z) {
-        depth_buf[p] = z;
+    if (depth_buf[p][k] > z) {
+        depth_buf[p][k] = z;
         return true;
     }
     return false;
@@ -386,13 +479,19 @@ void rst::rasterizer::set_projection(const Eigen::Matrix4f& p)
 
 void rst::rasterizer::clear(rst::Buffers buff)
 {
+    std::array<float, MSAA_SAMPLES> MaxDepthValue;
+    std::array<Vector3f, MSAA_SAMPLES> ClearColor;
+    for (int i = 0; i < MSAA_SAMPLES; i++) {
+        MaxDepthValue[i] = std::numeric_limits<float>::infinity();
+        ClearColor[i] = Vector3f{0.f, 0.f, 0.f};
+    }
     if ((buff & rst::Buffers::Color) == rst::Buffers::Color)
     {
-        std::fill(frame_buf.begin(), frame_buf.end(), Eigen::Vector3f{0, 0, 0});
+        std::fill(frame_buf.begin(), frame_buf.end(), ClearColor);
     }
     if ((buff & rst::Buffers::Depth) == rst::Buffers::Depth)
     {
-        std::fill(depth_buf.begin(), depth_buf.end(), std::numeric_limits<float>::infinity());
+        std::fill(depth_buf.begin(), depth_buf.end(), MaxDepthValue);
     }
 }
 
@@ -400,7 +499,8 @@ rst::rasterizer::rasterizer(int w, int h) : width(w), height(h)
 {
     frame_buf.resize(w * h);
     depth_buf.resize(w * h);
-
+    display_buf.resize(w * h);
+    
     texture = std::nullopt;
 }
 
@@ -413,7 +513,13 @@ void rst::rasterizer::set_pixel(const Vector2i &point, const Eigen::Vector3f &co
 {
     //old index: auto ind = point.y() + point.x() * width;
     int ind = (height-point.y())*width + point.x();
-    frame_buf[ind] = color;
+    //frame_buf[ind] = color;
+    assert(false);
+}
+
+void rst::rasterizer::set_pixel(int x, int y, int k, const Eigen::Vector3f &color) {
+    int ind = (height-y)*width + x;
+    frame_buf[ind][k] = color;
 }
 
 void rst::rasterizer::set_vertex_shader(std::function<Eigen::Vector3f(vertex_shader_payload)> vert_shader)

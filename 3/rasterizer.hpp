@@ -11,6 +11,8 @@
 #include "Shader.hpp"
 #include "Triangle.hpp"
 
+#define MSAA_SAMPLES 8
+
 using namespace Eigen;
 
 namespace rst
@@ -76,20 +78,25 @@ namespace rst
         void set_fragment_shader(std::function<Eigen::Vector3f(fragment_shader_payload)> frag_shader);
 
         void set_pixel(const Vector2i &point, const Eigen::Vector3f &color);
+        void set_pixel(int x, int y, int k, const Eigen::Vector3f &color);
 
         void clear(Buffers buff);
 
         void draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf_id col_buffer, Primitive type);
         void draw(std::vector<Triangle *> &TriangleList);
-
-        std::vector<Eigen::Vector3f>& frame_buffer() { return frame_buf; }
+        
+        // resolve 阶段
+        std::vector<Eigen::Vector3f>& frame_buffer() {
+            resolveMSAA();
+            return display_buf;
+        }
 
     private:
         void draw_line(Eigen::Vector3f begin, Eigen::Vector3f end);
-        bool setDepth(int x, int y, float z);
+        bool setDepth(int x, int y, int k, float z);
 
         void rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& world_pos);
-
+        void resolveMSAA();
         // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI -> FRAGSHADER
 
     private:
@@ -109,8 +116,10 @@ namespace rst
         std::function<Eigen::Vector3f(fragment_shader_payload)> fragment_shader;
         std::function<Eigen::Vector3f(vertex_shader_payload)> vertex_shader;
 
-        std::vector<Eigen::Vector3f> frame_buf;
-        std::vector<float> depth_buf;
+        std::vector<std::array<Vector3f, MSAA_SAMPLES>> frame_buf;
+        std::vector<std::array<float, MSAA_SAMPLES>> depth_buf;
+        std::vector<Eigen::Vector3f> display_buf;
+
         int get_index(int x, int y);
 
         int width, height;
